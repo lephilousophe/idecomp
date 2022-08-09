@@ -1,32 +1,39 @@
-#    pwexplode.py - implementation of the PKWARE Data Compression Library format (imploding) for byte streams
-#    Copyright (C) 2019 by Sven Kochmann, Philippe Valembois
-#
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-# Note: this program is mostly based on the description of Ben Rudiak-Gould in the comp.compression group:
+# pwexplode.py - implementation of the PKWARE Data Compression Library
+# format (imploding) for byte streams
+# Copyright (C) 2019 by Sven Kochmann, Philippe Valembois
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the  Free Software Foundation,  either version 3  of the License, or
+# (at your option) any later version.
+
+# This program  is distributed  in the hope  that it will  be  useful,
+# but  WITHOUT  ANY  WARRANTY;  without even  the implied warranty  of
+# MERCHANTABILITY  or  FITNESS  FOR  A  PARTICULAR  PURPOSE.  See  the
+# GNU General Public License for more details.
+
+# You  should  have  received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+# Note: this program is mostly based on the description of Ben Rudiak-
+# Gould in the comp.compression group:
 # https://groups.google.com/forum/#!msg/comp.compression/M5P064or93o/W1ca1-ad6kgJ
 # and zlib's blast.c:
 # https://github.com/madler/zlib/blob/master/contrib/blast/blast.c#L150
 
-# It should be noted that there is a small mistake in Ben's example. He writes 00 04 82 24 25 c7 80 7f should
-# decompress to 'AIAIAIAIAIAIA'; However, testing this with my implementation failed. I realized that there is
-# a small mistake in the sequence itself, when I created it with the official pkware ziptool (see below for tests)
-# and the sequence turned out to be actually 00 04 82 24 25 8f 80 7f (notice the difference at byte 6). This will
+# It should be noted that  there is  a small mistake in Ben's example.
+# He uses  00 04 82 24 25 c7 80 7f as example, which should decompress
+# to 'AIAIAIAIAIAIA'.  However,  testing  this with  my implementation
+# failed.  When  I created it  with  the official pkware ziptool  (see
+# below  for  tests),  the   sequence  turned  out   to  be   actually
+# 00 04 82 24 25 8f 80 7f (notice the difference at byte 6). This will
 # successfully decompress to 'AIAIAIAIAIAIA'.
 
 # Import stuff
-import collections
+import collections.abc
 from functools import wraps
 
 try:
@@ -43,7 +50,7 @@ def debug_print(text):
     if debugflag:
         import inspect
         cf = inspect.currentframe()
-        print("pwexplode.%s(), %d: %s" % (inspect.getframeinfo(cf.f_back)[2], cf.f_back.f_lineno, text))
+        print(f"pwexplode.{inspect.getframeinfo(cf.f_back)[2]}(), {cf.f_back.f_lineno}: {text}")
 
 def tobytes(iterable):
     for b in iterable:
@@ -64,7 +71,7 @@ class ByteStream:
     def __init__(self):
         self.buffer = bytearray()
         self.pos = 0
-    
+
     def push(self, data):
         self.buffer.extend(data)
 
@@ -109,14 +116,14 @@ class BitStream:
         self.purgecnt = 0
 
     def is_finished(self):
-        return (len(self.buffer) - self.pos) < 8 and all(map(lambda x: x == '0', self.buffer[self.pos:]))
+        return (len(self.buffer) - self.pos) < 8 and all([x == '0' for x in self.buffer[self.pos:]])
 
     def push(self, data):
         buf = ''
         if type(data) is str:
             data = tobytes(data)
         for b in data:
-            buf += '{0:08b}'.format(b)[::-1]
+            buf += f'{b:08b}'[::-1]
         self.buffer += buf
 
     def purge(self):
@@ -182,11 +189,11 @@ class BST:
 
     def __init__(self, key_values):
         self.root = Node()
-        if isinstance(key_values, collections.Mapping):
+        if isinstance(key_values, collections.abc.Mapping):
             try:
-                key_values = key_values.iteritems()
+                key_values = iter(key_values.items())
             except AttributeError:
-                key_values = key_values.items()
+                key_values = list(key_values.items())
 
         for k,v in key_values:
             self.insert(k, v)
@@ -435,8 +442,8 @@ def explode():
 
         # compressedstring should be a string...
         if type(idata) is not bytes:
-            raise RuntimeError("explode(): data sent is not a str but %s.", type(ibuf))
-        
+            raise RuntimeError(f"explode(): data sent is not a str but {type(ibuf)}.")
+
         ibuf.push(idata)
         idata = None
 
@@ -451,12 +458,11 @@ def explode():
                     # Second byte is 4, 5, or 6 (max size of dictionary)
                     dict_size = 1 << (6+maxdictlength)
                     # Print
-                    #debug_print("Literals are {0}. Size of dictionary is {1} ({2}).".format("coded" if codedliterals == 1 else "non-coded",
-                    #                                                             dict_size, maxdictlength))
+                    #debug_print(f"Literals are {'coded' if codedliterals == 1 else 'non-coded'}. Size of dictionary is {dict_size} ({maxdictlength}).")
 
                     # Test for dictionary size
                     if maxdictlength not in [4, 5, 6]:
-                        raise RuntimeError("explode(compressedstring): only dictionary sizes of 4, 5, or 6 are supported. {0} given.".format(maxdictlength))
+                        raise RuntimeError(f"explode(compressedstring): only dictionary sizes of 4, 5, or 6 are supported. {maxdictlength} given.")
 
                     # Start decompression
                     #debug_print("Starting decompression...")
@@ -469,7 +475,7 @@ def explode():
                 bit = ibuf.read(1)[0]
 
                 # Print
-                #debug_print("bit ({0}) says next is a {1}".format(bit, "literal" if not bit else "copy instruction"))
+                #debug_print(f"bit ({bit}) says next is a {'literal' if not bit else 'copy instruction'}")
 
                 # First bit = 0, means literal!
                 if bit == '0':
@@ -481,7 +487,7 @@ def explode():
                                                "Maybe string isn't compressed?")
 
                         # Print
-                        #debug_print("Found coded literal '\\x{0:02x}' from sequence '{1}' ({2})".format(pchar, ''.join('1' if k else '0' for k in seq), len(seq)))
+                        #debug_print(f"Found coded literal '\\x{pchar:02x}' from sequence '{''.join('1' if k else '0' for k in seq)}' ({len(seq)})")
 
                     # noncoded literal
                     else:
@@ -489,7 +495,7 @@ def explode():
                         pchar = ibuf.read_int(8)
 
                         # Print
-                        #debug_print("Found non-coded literal '\\x{0:02x}' by reading in 8 bits".format(pchar))
+                        #debug_print(f"Found non-coded literal '\\x{pchar:02x}' by reading in 8 bits")
 
                     # Add to output data
                     obuf.push((pchar, ))
@@ -504,11 +510,11 @@ def explode():
 
                     # End of stream?
                     if length == 519:
-                        #debug_print("Found end of compressed bit sequence '{0}' ({1}).".format(seq, length))
+                        #debug_print(f"Found end of compressed bit sequence '{seq}' ({length}).")
                         break
 
                     # Print
-                    #debug_print("%d bytes need to be copied/filled." % length)
+                    #debug_print(f"{length} bytes need to be copied/filled.")
 
                     # Distance/offset from the _end_ of the dictionary (in decompresseddata) to copy
                     dist = offsets.sfind(ibuf)
@@ -533,15 +539,14 @@ def explode():
                     dist += short_dist
 
                     # Print
-                    #debug_print("The final distance is {0} (raw: {1}, shifted by {2}: {3}, added: {4})".format(
-                    #            dist, raw_dist, bitsleft, shifted_dist, short_dist))
+                    #debug_print(f"The final distance is {dist} (raw: {raw_dist}, shifted by {bitsleft}: {shifted_dist}, added: {short_dist})")
 
                     # Copy exactly 'length' number of bytes!
-                    #debug_string = 
+                    #debug_string =
                     obuf.copy(dist, length)
-                    
+
                     # Print
-                    #debug_print("Copying and filling in {0} bytes from {1}: {2}".format(length, dist, debug_string))
+                    #debug_print(f"Copying and filling in {length} bytes from {dist}: {debug_string}")
         except NoMoreDataException:
             # We will feed at next step
             ibuf.restore_state(ibuf_state)
@@ -555,6 +560,7 @@ def explode():
     odata = obuf.pull(0)
     yield odata
 
+
 # Someone calling this file directly? Then let's print some tests!
 if __name__ == '__main__':
     import sys
@@ -566,13 +572,13 @@ if __name__ == '__main__':
         result = decompressed == outputdata
 
         # Print results for user
-        print("Test {0:02d}: '{1}' should decompress to '{2}'. Result = {3}".format(
-              number + 1, inputdata, outputdata, "True" if result else 'False'))
+        print(f"Test {number + 1:02d}: '{inputdata}' should decompress to '{expectedoutput}'. Result = {bool(result)}")
 
         # Counting successful tests
         if result:
             positivecounter += 1
         else:
+            print("Output gave: ", outputdata)
             sys.exit(1)
 
         return positivecounter, number + 1
@@ -580,9 +586,12 @@ if __name__ == '__main__':
 
     # Start test program
     print("pwexplode.py - implementation of the PKWARE Data Compression Library format (imploding) for byte streams")
-    print("Copyright (C) 2017 by Sven Kochmann")
+    print("Copyright (C) 2021 by Sven Kochmann")
+    print("")
     print("This program comes with ABSOLUTELY NO WARRANTY; This is free software, and you are welcome to redistribute")
     print("it under certain conditions; please see source code for details.")
+    print("")
+    print("Contributors: KOLANICH")
     print("")
 
     print("Running tests:")
@@ -601,4 +610,4 @@ if __name__ == '__main__':
                                b'Hello world! How are you, today? This is a very long text.', success, counter)
 
     # Print results
-    print("%d/%d tests performed successfully." % (success, counter))
+    print(f"{success}/{counter} tests performed successfully.")

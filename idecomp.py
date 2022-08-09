@@ -18,8 +18,6 @@
 # coding: utf-8
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
-from __future__ import print_function
-
 import argparse
 import collections
 import datetime
@@ -30,8 +28,6 @@ import sys
 import time
 
 import pwexplode
-
-DEBUG = True
 
 def filterfileobj(fsrc, fdst, in_length, filter=None, buffer_length=16*1024):
     """copy data from file-like object fsrc to file-like object fdst"""
@@ -118,11 +114,7 @@ class FileEntry(collections.namedtuple("FileEntry", ['end_part_id', 'dir_id', 'o
         hidden = self.attribs & 0x2
         system = self.attribs & 0x4
         archive = self.attribs & 0x20
-        return "{0}{1}{2}{3}".format(
-                "A" if archive else "_",
-                "H" if hidden else "_",
-                "R" if ro else "_",
-                "S" if system else "_")
+        return f"{'A' if archive else '_'}{'H' if hidden else '_'}{'R' if ro else '_'}{'S' if system else '_'}"
 
     @property
     def path(self):
@@ -153,10 +145,7 @@ class FileEntry(collections.namedtuple("FileEntry", ['end_part_id', 'dir_id', 'o
         return (self.flags & 0x100) != 0
 
     def __str__(self):
-        if DEBUG:
-            return u' {0:%m-%d-%y %H:%M} {1:>8} {2} {3:>8} {4}'.format(self.datetime, self.original_size, self.attributes, self.compacted_size, self.path.replace(os.sep, '\\'))
-        else:
-            return u' {0:%y-%m-%d %H:%M} {1:>8} {2} {3:>8} {4}'.format(self.datetime, self.original_size, self.attributes, self.compacted_size, self.path)
+        return f" {self.datetime:%y-%m-%d %H:%M} {self.original_size:>8} {self.attributes} {self.compacted_size:>8} {self.path}"
 
     def extract(self, base_path):
         if not self.is_correct:
@@ -179,10 +168,10 @@ class FileEntry(collections.namedtuple("FileEntry", ['end_part_id', 'dir_id', 'o
         read_size = 0
         written_size = 0
         #print(repr(self))
-        #print("Parts: {0}...{1}".format(self.start_part_id, self.end_part_id))
+        #print(f"Parts: {self.start_part_id}...{self.end_part_id}")
         for part_id in range(self.start_part_id, self.end_part_id + 1):
             archive = self.archive.get_part(part_id)
-            #print("Opening part {0}: file {1}".format(part_id, archive.path))
+            #print(f"Opening part {part_id}: file {archive}")
             hdr = archive.header
             f = archive.file
 
@@ -244,7 +233,7 @@ class Archive:
         if self.header.part_id == part_id:
             return self
 
-        other_part_name = os.path.join(self.dir_name, '{0}.{1}'.format(self.base_name, part_id))
+        other_part_name = os.path.join(self.dir_name, f'{self.base_name}.{part_id}')
         return Archive(other_part_name, self.encoding)
 
     def check_sig(self):
@@ -253,7 +242,7 @@ class Archive:
         magic = f.read(4)
         magic = struct.unpack("<L", magic)[0]
         if magic != 0x8C655D13:
-            raise Exception("Invalid magic: {0:08x}".format(magic))
+            raise Exception(f"Invalid magic: {magic:08x}")
 
         self.magic = True
 
@@ -266,7 +255,7 @@ class Archive:
         hdrSize = f.read(1)
         hdrSize = struct.unpack("<B", hdrSize)[0]
         if hdrSize != 0x3A:
-            raise Exception("Invalid header size : {0:02x} != 0x3A".format(hdrSize))
+            raise Exception(f"Invalid header size : {hdrSize:02x} != 0x3A")
 
         hdr = f.read(0x3A)
         assert(len(hdr) == struct.calcsize("<BBHBHHLLLLBBBLLLLHLLL"))
@@ -290,7 +279,7 @@ class Archive:
             name = f.read(ln+1)
             name = name.decode(self.encoding)
             if name[-1:] != '\x00':
-                print(u"Invalid dir name last character: {0!r} for {1}".format(name[-1], name[:-1]), file=sys.stderr)
+                print(f"Invalid dir name last character: {name[-1]!r} for {name[:-1]}", file=sys.stderr)
             name = name[:-1]
             assert(len(name) == ln)
             dirFtr = f.read(4)
@@ -318,7 +307,7 @@ class Archive:
             name = f.read(ln+1)
             name = name.decode(self.encoding)
             if name[-1:] != '\x00':
-                print(u"Invalid file name last character: {0!r} for {1}".format(name[-1], name[:-1]))
+                print(f"Invalid file name last character: {name[-1]!r} for {name[:-1]}")
             name = name[:-1]
             assert(len(name) == ln)
             fileFtr = f.read(12)
@@ -371,8 +360,8 @@ def list_files(archive, all_files=False, patterns=None, encoding=None, **kwargs)
     total_compacted_size = 0
     num_files = 0
 
-    print(u' {0:<8} {1:<5} {2:<8} {3:<4} {4:<8} {5:<4}'.format('Date','Time','OrigSize', 'Attr', 'CompSize', 'Name'))
-    print(u' {0:=<8} {0:=<5} {0:=<8} {0:=<4} {0:=<8} {0:=<4}'.format(''))
+    print(f' {"Date":<8} {"Time":<5} {"OrigSize":<8} {"Attr":<4} {"CompSize":<8} {"Name":<4}')
+    print(f' {"":=<8} {"":=<5} {"":=<8} {"":=<4} {"":=<8} {"":=<4}')
     for f in filter_list(all_files, arc):
         for pattern in patterns:
             if fnmatch.fnmatch(f.path.lower(), pattern):
@@ -382,16 +371,16 @@ def list_files(archive, all_files=False, patterns=None, encoding=None, **kwargs)
             if len(patterns):
                 continue
         
-        print(u'{0!s}'.format(f))
+        print(f'{f!s}')
 
         num_files += 1
         total_original_size += f.original_size
         total_compacted_size += f.compacted_size
 
-    print(u' {0: <8} {0: <5} {0:-<8} {0: <4} {0:-<8} {0:-<9}'.format(''))
-    print(u' {0: <8} {1: <5} {2: <8} {3: <4} {4: <8} {5: <9}'.format('','','OrigSize', '', 'CompSize', 'FileCount'))
-    print(u' {0: <8} {0: <5} {0:-<8} {0: <4} {0:-<8} {0:-<9}'.format(''))
-    print(u' {0: <8} {1: <5} {2: >8} {3: <4} {4: >8} {5: >9}'.format('','',total_original_size, '', total_compacted_size, num_files))
+    print(f' {"": <8} {"": <5} {"":=<8} {"": <4} {"":-<8} {"":-<4}')
+    print(f' {"": <8} {"": <5} {"OrigSize": <8} {"": <4} {"CompSize": <8} {"FileCount": <9}')
+    print(f' {"": <8} {"": <5} {"":=<8} {"": <4} {"":-<8} {"":-<4}')
+    print(f' {"": <8} {"": <5} {total_original_size: >8} {"": <4} {total_compacted_size: >8} {num_files: >9}')
 
 def extract_files(archive, directory, all_files=False, patterns=None, encoding=None, **kwargs):
     if patterns is None:
@@ -408,8 +397,8 @@ def extract_files(archive, directory, all_files=False, patterns=None, encoding=N
     total_compacted_size = 0
     num_files = 0
 
-    print(u' {0:<8} {1:<5} {2:<8} {3:<4} {4:<8} {5:<4}'.format('Date','Time','OrigSize', 'Attr', 'CompSize', 'Name'))
-    print(u' {0:=<8} {0:=<5} {0:=<8} {0:=<4} {0:=<8} {0:=<4}'.format(''))
+    print(f' {"Date":<8} {"Time":<5} {"OrigSize":<8} {"Attr":<4} {"CompSize":<8} {"Name":<4}')
+    print(f' {"":=<8} {"":=<5} {"":=<8} {"":=<4} {"":=<8} {"":=<4}')
     for f in filter_list(all_files, arc, main_arc):
         for pattern in patterns:
             if fnmatch.fnmatch(f.path.lower(), pattern):
@@ -419,17 +408,17 @@ def extract_files(archive, directory, all_files=False, patterns=None, encoding=N
             if len(patterns):
                 continue
         
-        print(u'{0!s}'.format(f))
+        print(f'{f!s}')
         f.extract(directory)
         
         num_files += 1
         total_original_size += f.original_size
         total_compacted_size += f.compacted_size
 
-    print(u' {0: <8} {0: <5} {0:-<8} {0: <4} {0:-<8} {0:-<9}'.format(''))
-    print(u' {0: <8} {1: <5} {2: <8} {3: <4} {4: <8} {5: <9}'.format('','','OrigSize', '', 'CompSize', 'FileCount'))
-    print(u' {0: <8} {0: <5} {0:-<8} {0: <4} {0:-<8} {0:-<9}'.format(''))
-    print(u' {0: <8} {1: <5} {2: >8} {3: <4} {4: >8} {5: >9}'.format('','',total_original_size, '', total_compacted_size, num_files))
+    print(f' {"": <8} {"": <5} {"":=<8} {"": <4} {"":-<8} {"":-<4}')
+    print(f' {"": <8} {"": <5} {"OrigSize": <8} {"": <4} {"CompSize": <8} {"FileCount": <9}')
+    print(f' {"": <8} {"": <5} {"":=<8} {"": <4} {"":-<8} {"":-<4}')
+    print(f' {"": <8} {"": <5} {total_original_size: >8} {"": <4} {total_compacted_size: >8} {num_files: >9}')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Decompress InstallShield .Z archives')
