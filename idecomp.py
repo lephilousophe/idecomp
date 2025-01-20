@@ -203,7 +203,7 @@ class FileEntry(collections.namedtuple("FileEntry", ['end_part_id', 'dir_id', 'o
         if ro:
             mode = os.stat(path).st_mode
             mode &= 0x7333
-            os.chmod(filename, mode)
+            os.chmod(path, mode)
 
 class Archive:
     def __init__(self, fName, encoding=None):
